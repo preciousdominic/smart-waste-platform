@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0EA5E9">
+<title>SMART WASTE - Smart Waste Disposal & Collection Platform</title>
+<meta name="description" content="Book instant or scheduled waste pickups. Real-time tracking, digital wallet, 7 user roles.">
+
+<!-- PWA Manifest Inline -->
+<link rel="manifest" id="manifest">
+<script>
+const manifest = {
+  "name": "SMART WASTE",
+  "short_name": "SmartWaste", 
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0EA5E9",
+  "icons": [
+    {"src": "https://ui-avatars.com/api/?name=SW&background=0EA5E9&color=fff&size=192", "sizes": "192x192", "type": "image/png"},
+    {"src": "https://ui-avatars.com/api/?name=SW&background=0EA5E9&color=fff&size=512", "sizes": "512x512", "type": "image/png"}
+  ]
+};
+document.getElementById('manifest').href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type: 'application/json'}));
+</script>
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50: '#F0F9FF', 100: '#E0F2FE', 500: '#0EA5E9', 600: '#0284C7', 700: '#0369A1', 900: '#0C4A6E' },
+        accent: { 500: '#10B981', 600: '#059669' }
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-up': 'slideUp 0.4s ease-out',
+        'pulse-slow': 'pulse 3s infinite'
+      },
+      keyframes: {
+        fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+        slideUp: { '0%': { transform: 'translateY(20px)', opacity: 0 }, '100%': { transform: 'translateY(0)', opacity: 1 } }
+      }
+    }
+  }
+}
+</script>
+
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<!-- Mapbox GL -->
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  body { -webkit-tap-highlight-color: transparent; }
+  
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .dark .glass {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+  }
+  .dark .skeleton { background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); background-size: 200% 100%; }
+  @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  
+  .mapboxgl-popup-content { padding: 0; border-radius: 12px; }
+  .scroll-hide::-webkit-scrollbar { display: none; }
+  
+  .step-active { background: #0EA5E9; color: white; }
+  .step-done { background: #10B981; color: white; }
+  
+  .btn-scale:active { transform: scale(0.97); }
+</style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+
+<!-- CONFIG: REPLACE WITH YOUR REAL KEYS -->
+<script>
+const CONFIG = {
+  DEMO_MODE: true, // Set false when you add real keys
+  firebase: {
+    apiKey: "DEMO_KEY_REPLACE",
+    authDomain: "smartwaste-demo.firebaseapp.com",
+    databaseURL: "https://smartwaste-demo-default-rtdb.firebaseio.com",
+    projectId: "smartwaste-demo",
+    storageBucket: "smartwaste-demo.appspot.com",
+    messagingSenderId: "000000000000",
+    appId: "1:000000000000:web:demo"
+  },
+  mapbox: "pk.demo_replace_with_your_token",
+  paystack: "pk_test_demo",
+  flutterwave: "FLWPUBK_TEST-demo"
+};
+</script>
+
+<!-- App Container -->
+<div id="app" class="min-h-screen">
+
+  <!-- Top Nav -->
+  <nav class="sticky top-0 z-50 glass">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center">
+            <i class="fa-solid fa-recycle text-white text-xl"></i>
+          </div>
+          <span class="font-bold text-xl">SMART WASTE</span>
+        </div>
+        
+        <div class="hidden md:flex items-center gap-6">
+          <a href="#features" class="text-sm font-medium hover:text-brand-600 transition">Features</a>
+          <a href="#pricing" class="text-sm font-medium hover:text-brand-600 transition">Pricing</a>
+          <a href="#coverage" class="text-sm font-medium hover:text-brand-600 transition">Coverage</a>
+          <a href="#faq" class="text-sm font-medium hover:text-brand-600 transition">FAQ</a>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <!-- Dark Mode Toggle -->
+          <button id="themeToggle" class="w-10 h-10 rounded-lg glass flex items-center justify-center hover:bg-white/20 transition btn-scale">
+            <i class="fa-solid fa-moon dark:hidden"></i>
+            <i class="fa-solid fa-sun hidden dark:block"></i>
+          </button>
+          
+          <!-- Role Switcher for Demo -->
+          <select id="roleSwitcher" class="text-sm bg-white/10 dark:bg-slate-800 border border-white/20 rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none">
+            <option value="guest">Guest View</option>
+            <option value="customer">Individual Customer</option>
+            <option value="business">Business Customer</option>
+            <option value="agent">Collection Agent</option>
+            <option value="driver">Driver</option>
+            <option value="support">Customer Support</option>
+            <option value="operations">Operations Manager</option>
+            <option value="admin">Super Admin</option>
+          </select>
+          
+          <button id="loginBtn" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition btn-scale">
+            Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <main id="mainContent">
+    
+    <!-- LANDING PAGE -->
+    <section id="landingPage" class="animate-fade-in">
+      <!-- Hero -->
+      <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-brand-500/20 via-accent-500/10 to-transparent"></div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 relative">
+          <div class="grid lg:grid-cols-2 gap-12 items-center">
+            <div class="animate-slide-up">
+              <div class="inline-flex items-center gap-2 bg-brand-500/10 text-brand-700 dark:text-brand-400 px-4 py-2 rounded-full text-sm font-medium mb-6">
+                <i class="fa-solid fa-bolt"></i> Now in 12+ Cities
+              </div>
+              <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6">
+                Smart Waste <span class="bg-gradient-to-r from-brand-600 to-accent-600 bg-clip-text text-transparent">Collection</span> On Demand
+              </h1>
+              <p class="text-lg text-slate-600 dark:text-slate-400 mb-8">
+                Book instant or scheduled pickups. Track agents live. Pay cashless. Help the planet. All in one premium platform.
+              </p>
+              <div class="flex flex-wrap gap-4">
+                <button onclick="showBooking()" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-brand-500/30 transition btn-scale">
+                  <i class="fa-solid fa-truck mr-2"></i>Book Pickup Now
+                </button>
+                <button onclick="scrollToSection('coverage')" class="glass px-6 py-3 rounded-xl font-semibold hover:bg-white/20 transition btn-scale">
+                  <i class="fa-solid fa-map-location-dot mr-2"></i>Check Coverage
+                </button>
+              </div>
+              <div class="flex items-center gap-6 mt-10">
+                <div><div class="text-2xl font-bold">50K+</div><div class="text-sm text-slate-500">Pickups</div></div>
+                <div><div class="text-2xl font-bold">4.9★</div><div class="text-sm text-slate-500">Rating</div></div>
+                <div><div class="text-2xl font-bold">120T</div><div class="text-sm text-slate-500">Recycled</div></div>
+              </div>
+            </div>
+            <div class="relative">
+              <div class="glass rounded-3xl p-2 shadow-2xl">
+                <div id="heroMap" class="w-full h-[400px] rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+              </div>
+              <div class="absolute -bottom-6 -left-6 glass rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-full bg-accent-500 flex items-center justify-center text-white">
+                    <i class="fa-solid fa-check"></i>
+                  </div>
+                  <div>
+                    <div class="font-semibold">Agent Arriving</div>
+                    <div class="text-sm text-slate-500">2 mins away</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- How It Works -->
+      <section id="features" class="py-20 bg-white dark:bg-slate-800/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
+            <p class="text-slate-600 dark:text-slate-400">From booking to recycling in 4 simple steps</p>
+          </div>
+          <div class="grid md:grid-cols-4 gap-8">
+            <div class="text-center">
+              <div class="w-16 h-16 mx-auto rounded-2xl bg-brand-500/10 text-brand-600 flex items-center justify-center text-2xl mb-4">
+                <i class="fa-solid fa-location-dot"></i>
+              </div>
+              <h3 class="font-semibold mb-2">1. Set Location</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Pin your address or enable live location</p>
+            </div>
+            <div class="text-center">
+              <div class="w-16 h-16 mx-auto rounded-2xl bg-brand-500/10 text-brand-600 flex items-center justify-center text-2xl mb-4">
+                <i class="fa-solid fa-box"></i>
+              </div>
+              <h3 class="font-semibold mb-2">2. Select Waste</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Choose category, size & add photos</p>
+            </div>
+            <div class="text-center">
+              <div class="w-16 h-16 mx-auto rounded-2xl bg-brand-500/10 text-brand-600 flex items-center justify-center text-2xl mb-4">
+                <i class="fa-solid fa-truck-fast"></i>
+              </div>
+              <h3 class="font-semibold mb-2">3. Track Live</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Agent assigned & tracked in real-time</p>
+            </div>
+            <div class="text-center">
+              <div class="w-16 h-16 mx-auto rounded-2xl bg-brand-500/10 text-brand-600 flex items-center justify-center text-2xl mb-4">
+                <i class="fa-solid fa-leaf"></i>
+              </div>
+              <h3 class="font-semibold mb-2">4. Go Green</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Waste recycled. Earn eco points</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Service Categories -->
+      <section class="py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Waste Categories</h2>
+            <p class="text-slate-600 dark:text-slate-400">We collect all types responsibly</p>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Household')">
+              <i class="fa-solid fa-house text-3xl text-brand-600 mb-3"></i>
+              <div class="font-semibold">Household</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Plastic')">
+              <i class="fa-solid fa-bottle-water text-3xl text-brand-600 mb-3"></i>
+              <div class="font-semibold">Plastic</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Organic')">
+              <i class="fa-solid fa-apple-whole text-3xl text-accent-600 mb-3"></i>
+              <div class="font-semibold">Organic</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Electronic')">
+              <i class="fa-solid fa-laptop text-3xl text-brand-600 mb-3"></i>
+              <div class="font-semibold">Electronic</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Construction')">
+              <i class="fa-solid fa-hammer text-3xl text-orange-600 mb-3"></i>
+              <div class="font-semibold">Construction</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Industrial')">
+              <i class="fa-solid fa-industry text-3xl text-slate-600 mb-3"></i>
+              <div class="font-semibold">Industrial</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Medical')">
+              <i class="fa-solid fa-briefcase-medical text-3xl text-red-600 mb-3"></i>
+              <div class="font-semibold">Medical</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Office')">
+              <i class="fa-solid fa-building text-3xl text-brand-600 mb-3"></i>
+              <div class="font-semibold">Office</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer" onclick="startBooking('Recyclables')">
+              <i class="fa-solid fa-recycle text-3xl text-accent-600 mb-3"></i>
+              <div class="font-semibold">Recyclables</div>
+            </div>
+            <div class="glass rounded-2xl p-6 text-center hover:scale-105 transition cursor-pointer">
+              <i class="fa-solid fa-ellipsis text-3xl text-slate-400 mb-3"></i>
+              <div class="font-semibold">Custom</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pricing -->
+      <section id="pricing" class="py-20 bg-white dark:bg-slate-800/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Simple Pricing</h2>
+            <p class="text-slate-600 dark:text-slate-400">Pay per pickup or subscribe & save</p>
+          </div>
+          <div class="grid md:grid-cols-3 gap-8">
+            <div class="glass rounded-3xl p-8 hover:shadow-2xl transition">
+              <h3 class="text-xl font-bold mb-2">Pay As You Go</h3>
+              <div class="text-4xl font-extrabold mb-4">$5<span class="text-lg font-medium text-slate-500">/pickup</span></div>
+              <ul class="space-y-3 mb-8">
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Instant booking</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>All waste types</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Live tracking</li>
+              </ul>
+              <button onclick="startBooking()" class="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-semibold btn-scale">Get Started</button>
+            </div>
+            <div class="glass rounded-3xl p-8 border-2 border-brand-500 relative hover:shadow-2xl transition">
+              <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-brand-600 text-white px-4 py-1 rounded-full text-sm">Popular</div>
+              <h3 class="text-xl font-bold mb-2">Weekly Plan</h3>
+              <div class="text-4xl font-extrabold mb-4">$15<span class="text-lg font-medium text-slate-500">/week</span></div>
+              <ul class="space-y-3 mb-8">
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>2 pickups/week</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Priority scheduling</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Auto-renew</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Eco points 2x</li>
+              </ul>
+              <button onclick="startSubscription('weekly')" class="w-full bg-brand-600 text-white py-3 rounded-xl font-semibold btn-scale">Subscribe</button>
+            </div>
+            <div class="glass rounded-3xl p-8 hover:shadow-2xl transition">
+              <h3 class="text-xl font-bold mb-2">Business</h3>
+              <div class="text-4xl font-extrabold mb-4">Custom</div>
+              <ul class="space-y-3 mb-8">
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Multiple locations</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Monthly invoicing</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Dedicated support</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-check text-accent-600"></i>Impact reports</li>
+              </ul>
+              <button onclick="contactSales()" class="w-full glass py-3 rounded-xl font-semibold btn-scale">Contact Sales</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Coverage Map -->
+      <section id="coverage" class="py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-12">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Service Coverage</h2>
+            <p class="text-slate-600 dark:text-slate-400">We're expanding every month</p>
+          </div>
+          <div class="glass rounded-3xl p-2">
+            <div id="coverageMap" class="w-full h-[500px] rounded-2xl bg-slate-200 dark:bg-slate-800"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq" class="py-20 bg-white dark:bg-slate-800/50">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 class="text-3xl md:text-4xl font-bold text-center mb-12">FAQs</h2>
+          <div class="space-y-4" id="faqList">
+            <div class="glass rounded-2xl p-6">
+              <button class="faq-toggle w-full flex justify-between items-center font-semibold text-left">
+                <span>What waste types do you collect?</span>
+                <i class="fa-solid fa-chevron-down transition"></i>
+              </button>
+              <div class="faq-content hidden mt-4 text-slate-600 dark:text-slate-400">
+                We collect Household, Plastic, Organic, E-waste, Construction, Industrial, Medical, Office waste, and all recyclables. Hazardous materials have special handling.
+              </div>
+            <div class="glass rounded-2xl p-6">
+              <button class="faq-toggle w-full flex justify-between items-center font-semibold text-left">
+                <span>How fast is pickup?</span>
+                <i class="fa-solid fa-chevron-down transition"></i>
+              </button>
+              <div class="faq-content hidden mt-4 text-slate-600 dark:text-slate-400">
+                Instant pickup: average 30-60 mins. Scheduled: pick your date & 2-hour window. Subscriptions run automatically.
+              </div>
+            </div>
+            <div class="glass rounded-2xl p-6">
+              <button class="faq-toggle w-full flex justify-between items-center font-semibold text-left">
+                <span>What payment methods?</span>
+                <i class="fa-solid fa-chevron-down transition"></i>
+              </button>
+              <div class="faq-content hidden mt-4 text-slate-600 dark:text-slate-400">
+                Cards via Paystack & Flutterwave, bank transfer, and SMART WASTE wallet. Business accounts get monthly invoicing.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Environmental Impact -->
+      <section class="py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="text-center mb-16">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Environmental Impact</h2>
+            <p class="text-slate-600 dark:text-slate-400">Together we're making a difference</p>
+          </div>
+          <div class="grid md:grid-cols-4 gap-6">
+            <div class="glass rounded-2xl p-8 text-center">
+              <div class="text-4xl font-extrabold text-accent-600 mb-2" id="statWaste">120T</div>
+              <div class="text-slate-600 dark:text-slate-400">Waste Collected</div>
+            </div>
+            <div class="glass rounded-2xl p-8 text-center">
+              <div class="text-4xl font-extrabold text-brand-600 mb-2" id="statRecycled">85T</div>
+              <div class="text-slate-600 dark:text-slate-400">Recycled</div>
+            </div>
+            <div class="glass rounded-2xl p-8 text-center">
+              <div class="text-4xl font-extrabold text-green-600 mb-2" id="statCO2">45T</div>
+              <div class="text-slate-600 dark:text-slate-400">CO₂ Saved</div>
+            </div>
+            <div class="glass rounded-2xl p-8 text-center">
+              <div class="text-4xl font-extrabold text-orange-600 mb-2" id="statTrees">380</div>
+              <div class="text-slate-600 dark:text-slate-400">Trees Equivalent</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- DASHBOARDS CONTAINER -->
+    <section id="dashboards" class="hidden">
+      <!-- Content injected by JS based on role -->
+    </section>
+
+    <!-- BOOKING MODAL -->
+    <div id="bookingModal" class="hidden fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto scroll-hide">
+        <div class="p-6 border-b border-white/10 flex justify-between items-center">
+          <h3 class="text-2xl font-bold">Book Waste Pickup</h3>
+          <button onclick="closeBooking()" class="w-10 h-10 rounded-lg glass flex items-center justify-center btn-scale">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="p-6">
+          <!-- Stepper -->
+          <div class="flex items-center justify-between mb-8">
+            <div class="flex flex-col items-center gap-2">
+              <div id="step1" class="step-active w-10 h-10 rounded-full flex items-center justify-center font-bold">1</div>
+              <span class="text-xs">Location</span>
+            </div>
+            <div class="flex-1 h-1 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+            <div class="flex flex-col items-center gap-2">
+              <div id="step2" class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold">2</div>
+              <span class="text-xs">Details</span>
+            </div>
+            <div class="flex-1 h-1 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+            <div class="flex flex-col items-center gap-2">
+              <div id="step3" class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold">3</div>
+              <span class="text-xs">Payment</span>
+            </div>
+          </div>
+          
+          <!-- Step 1: Location -->
+          <div id="bookingStep1" class="space-y-4">
+            <div id="bookingMap" class="w-full h-64 rounded-xl bg-slate-200 dark:bg-slate-800"></div>
+            <input id="addressInput" type="text" placeholder="Enter address or drag pin" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+            <button onclick="useCurrentLocation()" class="w-full glass py-3 rounded-xl font-semibold btn-scale">
+              <i class="fa-solid fa-location-crosshairs mr-2"></i>Use Current Location
+            </button>
+            <button onclick="nextBookingStep(2)" class="w-full bg-brand-600 text-white py-3 rounded-xl font-semibold btn-scale">Continue</button>
+          </div>
+
+          <!-- Step 2: Details -->
+          <div id="bookingStep2" class="hidden space-y-4">
+            <select id="wasteCategory" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+              <option value="">Select Waste Category</option>
+              <option>Household</option><option>Plastic</option><option>Organic</option><option>Electronic</option>
+              <option>Construction</option><option>Industrial</option><option>Medical</option><option>Office</option><option>Recyclables</option>
+            </select>
+            <select id="wasteSize" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+              <option value="">Estimate Size</option>
+              <option value="small">Small - 1-2 bags</option>
+              <option value="medium">Medium - 3-5 bags</option>
+              <option value="large">Large - Truck load</option>
+            </select>
+            <div class="grid grid-cols-2 gap-4">
+              <input id="pickupDate" type="date" class="bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+              <input id="pickupTime" type="time" class="bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+            </div>
+            <textarea id="wasteNotes" placeholder="Notes for agent (optional)" rows="3" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none"></textarea>
+            <div>
+              <label class="block text-sm mb-2">Upload Photos</label>
+              <input id="wastePhotos" type="file" multiple accept="image/*" class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-brand-600 file:text-white">
+            </div>
+            <div class="flex gap-3">
+              <button onclick="nextBookingStep(1)" class="flex-1 glass py-3 rounded-xl font-semibold btn-scale">Back</button>
+              <button onclick="nextBookingStep(3)" class="flex-1 bg-brand-600 text-white py-3 rounded-xl font-semibold btn-scale">Continue</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Payment -->
+          <div id="bookingStep3" class="hidden space-y-4">
+            <div class="glass rounded-xl p-4">
+              <div class="flex justify-between mb-2"><span>Pickup Fee</span><span class="font-bold">$5.00</span></div>
+              <div class="flex justify-between mb-2"><span>Service Fee</span><span class="font-bold">$1.00</span></div>
+              <div class="border-t border-white/20 pt-2 flex justify-between text-lg font-bold">
+                <span>Total</span><span>$6.00</span>
+              </div>
+            <div class="space-y-2">
+              <button onclick="payWith('paystack')" class="w-full bg-[#011B33] text-white py-3 rounded-xl font-semibold btn-scale">
+                <i class="fa-solid fa-credit-card mr-2"></i>Pay with Paystack
+              </button>
+              <button onclick="payWith('flutterwave')" class="w-full bg-[#F5A623] text-white py-3 rounded-xl font-semibold btn-scale">
+                <i class="fa-solid fa-wallet mr-2"></i>Pay with Flutterwave
+              </button>
+              <button onclick="payWithWallet()" class="w-full glass py-3 rounded-xl font-semibold btn-scale">
+                <i class="fa-solid fa-coins mr-2"></i>Pay from Wallet ($24.50)
+              </button>
+            </div>
+            <button onclick="nextBookingStep(2)" class="w-full glass py-3 rounded-xl font-semibold btn-scale">Back</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div id="loginModal" class="hidden fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="glass rounded-3xl max-w-md w-full p-8">
+        <div class="text-center mb-6">
+          <h3 class="text-2xl font-bold mb-2">Welcome Back</h3>
+          <p class="text-slate-600 dark:text-slate-400">Sign in to your account</p>
+        </div>
+        <div class="space-y-4">
+          <button onclick="demoLogin('google')" class="w-full glass py-3 rounded-xl font-semibold flex items-center justify-center gap-3 btn-scale">
+            <i class="fa-brands fa-google"></i> Continue with Google
+          </button>
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/20"></div></div>
+            <div class="relative flex justify-center text-sm"><span class="px-2 bg-slate-50 dark:bg-slate-900">Or</span></div>
+          </div>
+          <input type="email" placeholder="Email" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+          <input type="password" placeholder="Password" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 focus:ring-2 focus:ring-brand-500 outline-none">
+          <button onclick="demoLogin('email')" class="w-full bg-brand-600 text-white py-3 rounded-xl font-semibold btn-scale">Sign In</button>
+          <button onclick="closeLogin()" class="w-full glass py-3 rounded-xl font-semibold btn-scale">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 text-slate-300 py-16 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-12">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center">
+              <i class="fa-solid fa-recycle text-white"></i>
+            </div>
+            <span class="font-bold text-xl text-white">SMART WASTE</span>
+          </div>
+          <p class="text-sm">Smart waste collection for a cleaner planet.</p>
+        </div>
+        <div>
+          <h4 class="font-semibold text-white mb-4">Company</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="#" class="hover:text-brand-400">About</a></li>
+            <li><a href="#" class="hover:text-brand-400">Blog</a></li>
+            <li><a href="#" class="hover:text-brand-400">Careers</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-semibold text-white mb-4">Support</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="#" class="hover:text-brand-400">Help Center</a></li>
+            <li><a href="#" class="hover:text-brand-400">Contact</a></li>
+            <li><a href="#" class="hover:text-brand-400">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-semibold text-white mb-4">Legal</h4>
+          <ul class="space-y-2 text-sm">
+            <li><a href="#" class="hover:text-brand-400">Privacy</a></li>
+            <li><a href="#" class="hover:text-brand-400">Terms</a></li>
+          </ul>
+        </div>
+      <div class="border-t border-slate-800 pt-8 text-sm text-center">
+        © 2024 SMART WASTE. All rights reserved. Demo Mode Active.
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="fixed bottom-4 right-4 z-[200] space-y-2"></div>
+
+<script>
+// ====== APP STATE ======
+let currentRole = 'guest';
+let currentUser = null;
+let heroMap, coverageMap, bookingMap;
+let currentBooking = {};
+
+// ====== MOCK DATA ======
+const MOCK_DB = {
+  users: {
+    customer1: { id: 'c1', name: 'John Doe', email: 'john@demo.com', role: 'customer', wallet: 24.50, ecoPoints: 340 },
+    agent1: { id: 'a1', name: 'Mike Driver', email: 'mike@demo.com', role: 'agent', rating: 4.9, completed: 234 },
+    admin1: { id: 'admin1', name: 'Admin', email: 'admin@demo.com', role: 'admin' }
+  },
+  bookings: [
+    { id: 'b1', userId: 'c1', status: 'completed', category: 'Household', date: '2024-01-15', agent: 'Mike Driver', rating: 5 },
+    { id: 'b2', userId: 'c1', status: 'on_the_way', category: 'Plastic', date: '2024-01-20', agent: 'Sarah K', eta: '8 mins' },
+    { id: 'b3', userId: 'c1', status: 'scheduled', category: 'Electronic', date: '2024-01-25', agent: 'TBD' }
+  ],
+  stats: { bookings: 50234, revenue: 284500, customers: 12500, satisfaction: 4.9 }
+};
+
+// ====== THEME ======
+const themeToggle = document.getElementById('themeToggle');
+const html = document.documentElement;
+const savedTheme = localStorage.getItem('theme') || 'light';
+if (savedTheme === 'dark') html.classList.add('dark');
+
+themeToggle.onclick = () => {
+  html.classList.toggle('dark');
+  localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+  if (heroMap) heroMap.setStyle(html.classList.contains('dark') ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11');
+};
+
+// ====== ROLE SWITCHER ======
+document.getElementById('roleSwitcher').onchange = (e) => {
+  currentRole = e.target.value;
+  showDashboard(currentRole);
+  showToast(`Switched to ${currentRole} view`, 'info');
+};
+
+// ====== LOGIN ======
+document.getElementById('loginBtn').onclick = () => {
+  document.getElementById('loginModal').classList.remove('hidden');
+};
+function closeLogin() { document.getElementById('loginModal').classList.add('hidden'); }
+function demoLogin(method) {
+  if (!CONFIG.DEMO_MODE && CONFIG.firebase.apiKey === 'DEMO_KEY_REPLACE') {
+    showToast('Add real Firebase keys first', 'error');
+    return;
+  }
+  currentUser = MOCK_DB.users.customer1;
+  currentRole = 'customer';
+  document.getElementById('roleSwitcher').value = 'customer';
+  closeLogin();
+  showDashboard('customer');
+  showToast(`Signed in via ${method}`, 'success');
+}
+
+// ====== BOOKING FLOW ======
+function showBooking() { document.getElementById('bookingModal').classList.remove('hidden'); initBookingMap(); }
+function closeBooking() { document.getElementById('bookingModal').classList.add('hidden'); resetBookingForm(); }
+function startBooking(category = '') {
+  showBooking();
+  if (category) document.getElementById('wasteCategory').value = category;
+}
+function nextBookingStep(step) {
+  [1,2,3].forEach(s => {
+    document.getElementById(`bookingStep${s}`).classList.add('hidden');
+    document.getElementById(`step${s}`).classList.remove('step-active', 'step-done');
+  });
+  document.getElementById(`bookingStep${step}`).classList.remove('hidden');
+  document.getElementById(`step${step}`).classList.add('step-active');
+  for(let i=1; i<step; i++) document.getElementById(`step${i}`).classList.add('step-done');
+}
+function useCurrentLocation() {
+  showToast('Location detected: Lagos, Nigeria', 'success');
+  document.getElementById('addressInput').value = '15 Admiralty Way, Lekki Phase 1, Lagos';
+}
+function payWith(provider) {
+  showToast(`Processing with ${provider}...`, 'info');
+  setTimeout(() => {
+    closeBooking();
+    showToast('Booking confirmed! Agent assigned.', 'success');
+    trackBooking('b_new');
+  }, 1500);
+}
+function payWithWallet() {
+  showToast('Paying from wallet...', 'info');
+  setTimeout(() => {
+    closeBooking();
+    showToast('Payment successful! Booking confirmed.', 'success');
+    trackBooking('b_new');
+  }, 1000);
+}
+function resetBookingForm() {
+  nextBookingStep(1);
+  document.getElementById('addressInput').value = '';
+  document.getElementById('wasteCategory').value = '';
+}
+
+// ====== DASHBOARDS ======
+function showDashboard(role) {
+  document.getElementById('landingPage').classList.add('hidden');
+  const dash = document.getElementById('dashboards');
+  dash.classList.remove('hidden');
+  
+  const dashboards = {
+    customer: renderCustomerDashboard,
+    business: renderBusinessDashboard,
+    agent: renderAgentDashboard,
+    driver: renderDriverDashboard,
+    support: renderSupportDashboard,
+    operations: renderOperationsDashboard,
+    admin: renderAdminDashboard
+  };
+  
+  dash.innerHTML = dashboards[role] ? dashboards[role]() : renderCustomerDashboard();
+  
+  // Init charts if present
+  setTimeout(initDashboardCharts, 100);
+}
+
+function renderCustomerDashboard() {
+  return `
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">Welcome back, ${currentUser?.name || 'User'}!</h1>
+      <p class="text-slate-600 dark:text-slate-400">Manage your pickups and track impact</p>
+    </div>
+    
+    <div class="grid md:grid-cols-4 gap-6 mb-8">
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Wallet Balance</div>
+        <div class="text-3xl font-bold">$24.50</div>
+        <button class="text-sm text-brand-600 mt-2">Add Funds →</button>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Eco Points</div>
+        <div class="text-3xl font-bold">340</div>
+        <div class="text-sm text-accent-600 mt-2">↑ 45 this month</div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Active Requests</div>
+        <div class="text-3xl font-bold">2</div>
+        <div class="text-sm text-slate-500 mt-2">1 on the way</div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">CO₂ Saved</div>
+        <div class="text-3xl font-bold">12kg</div>
+        <div class="text-sm text-accent-600 mt-2">Great job!</div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <div class="glass rounded-2xl p-6 mb-6">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold">Active Pickups</h2>
+            <button onclick="showBooking()" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold btn-scale">New Request</button>
+          </div>
+          <div class="space-y-4">
+            ${MOCK_DB.bookings.filter(b => b.status !== 'completed').map(b => `
+              <div class="glass rounded-xl p-4 hover:shadow-lg transition">
+                <div class="flex justify-between items-start mb-3">
+                  <div>
+                    <div class="font-semibold">${b.category} Waste</div>
+                    <div class="text-sm text-slate-600 dark:text-slate-400">${b.date}</div>
+                  </div>
+                  <span class="px-3 py-1 rounded-full text-xs font-semibold ${b.status === 'on_the_way' ? 'bg-accent-500/20 text-accent-600' : 'bg-brand-500/20 text-brand-600'}">${b.status.replace('_', ' ').toUpperCase()}</span>
+                </div>
+                ${b.status === 'on_the_way' ? `
+                  <div class="mb-3">
+                    <div class="text-sm mb-2">Agent: ${b.agent} • ${b.eta} away</div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                      <div class="bg-accent-600 h-2 rounded-full" style="width: 65%"></div>
+                    </div>
+                  </div>
+                  <button onclick="trackBooking('${b.id}')" class="text-sm text-brand-600 font-semibold">Track Live →</button>
+                ` : `
+                  <div class="text-sm text-slate-600 dark:text-slate-400">Agent will be assigned soon</div>
+                `}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <h2 class="text-xl font-bold mb-6">Pickup History</h2>
+          <div class="space-y-3">
+            ${MOCK_DB.bookings.filter(b => b.status === 'completed').map(b => `
+              <div class="flex justify-between items-center py-3 border-b border-white/10 last:border-0">
+                <div>
+                  <div class="font-semibold">${b.category}</div>
+                  <div class="text-sm text-slate-600 dark:text-slate-400">${b.date} • ${b.agent}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex">★★★★★</div>
+                  <span class="text-sm">$6.00</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="glass rounded-2xl p-6 mb-6">
+          <h3 class="font-bold mb-4">Quick Actions</h3>
+          <div class="space-y-3">
+            <button onclick="showBooking()" class="w-full glass py-3 rounded-xl font-semibold text-left flex items-center gap-3 btn-scale">
+              <i class="fa-solid fa-plus text-brand-600"></i> Book Pickup
+            </button>
+            <button class="w-full glass py-3 rounded-xl font-semibold text-left flex items-center gap-3 btn-scale">
+              <i class="fa-solid fa-calendar text-brand-600"></i> Schedule Recurring
+            </button>
+            <button class="w-full glass py-3 rounded-xl font-semibold text-left flex items-center gap-3 btn-scale">
+              <i class="fa-solid fa-wallet text-brand-600"></i> Fund Wallet
+            </button>
+            <button class="w-full glass py-3 rounded-xl font-semibold text-left flex items-center gap-3 btn-scale">
+              <i class="fa-solid fa-headset text-brand-600"></i> Support
+            </button>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-6">
+          <h3 class="font-bold mb-4">Your Impact</h3>
+          <canvas id="impactChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderAdminDashboard() {
+  return `
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">Admin Dashboard</h1>
+      <p class="text-slate-600 dark:text-slate-400">Manage platform operations</p>
+    </div>
+    
+    <div class="grid md:grid-cols-4 gap-6 mb-8">
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Total Bookings</div>
+        <div class="text-3xl font-bold">50,234</div>
+        <div class="text-sm text-accent-600 mt-2">↑ 12% this month</div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Revenue</div>
+        <div class="text-3xl font-bold">$284K</div>
+        <div class="text-sm text-accent-600 mt-2">↑ 8% this month</div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Active Agents</div>
+        <div class="text-3xl font-bold">142</div>
+        <div class="text-sm text-slate-500 mt-2">18 online now</div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="text-sm text-slate-600 dark:text-slate-400 mb-2">Satisfaction</div>
+        <div class="text-3xl font-bold">4.9★</div>
+        <div class="text-sm text-accent-600 mt-2">Excellent</div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-xl font-bold mb-6">Revenue Analytics</h2>
+        <canvas id="revenueChart"></canvas>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-xl font-bold mb-6">Booking Trends</h2>
+        <canvas id="bookingChart"></canvas>
+      </div>
+    </div>
+
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-xl font-bold mb-6">Recent Requests</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b border-white/10">
+            <tr class="text-left">
+              <th class="pb-3">ID</th>
+              <th class="pb-3">Customer</th>
+              <th class="pb-3">Category</th>
+              <th class="pb-3">Status</th>
+              <th class="pb-3">Agent</th>
+              <th class="pb-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${MOCK_DB.bookings.map(b => `
+              <tr class="border-b border-white/10">
+                <td class="py-3">#${b.id}</td>
+                <td class="py-3">John Doe</td>
+                <td class="py-3">${b.category}</td>
+                <td class="py-3"><span class="px-2 py-1 rounded-lg text-xs bg-brand-500/20 text-brand-600">${b.status}</span></td>
+                <td class="py-3">${b.agent || 'Unassigned'}</td>
+                <td class="py-3"><button class="text-brand-600 font-semibold">Assign</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderBusinessDashboard() { return renderCustomerDashboard().replace('Individual Customer', 'Business Account'); }
+function renderAgentDashboard() { return renderCustomerDashboard().replace('Welcome back', 'Agent Portal').replace('Manage your pickups', 'View assigned jobs'); }
+function renderDriverDashboard() { return renderAgentDashboard(); }
+function renderSupportDashboard() { return renderAdminDashboard().replace('Admin Dashboard', 'Support Dashboard').replace('Manage platform', 'Handle tickets'); }
+function renderOperationsDashboard() { return renderAdminDashboard().replace('Admin', 'Operations'); }
+
+// ====== MAPS ======
+function initMaps() {
+  if (CONFIG.DEMO_MODE && CONFIG.mapbox.includes('demo')) {
+    document.getElementById('heroMap').innerHTML = '<div class="flex items-center justify-center h-full"><div class="text-center"><i class="fa-solid fa-map text-4xl mb-3 text-slate-400"></i><div class="text-sm">Add Mapbox token to enable maps</div></div></div>';
+    return;
+  }
+  
+  mapboxgl.accessToken = CONFIG.mapbox;
+  if (document.getElementById('heroMap') && !heroMap) {
+    heroMap = new mapboxgl.Map({
+      container: 'heroMap',
+      style: html.classList.contains('dark') ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11',
+      center: [3.3792, 6.5244],
+      zoom: 11
+    });
+  }
+}
+
+function initBookingMap() {
+  if (CONFIG.DEMO_MODE && CONFIG.mapbox.includes('demo')) return;
+  if (!document.getElementById('bookingMap') || bookingMap) return;
+  mapboxgl.accessToken = CONFIG.mapbox;
+  bookingMap = new mapboxgl.Map({
+    container: 'bookingMap',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [3.3792, 6.5244],
+    zoom: 13
+  });
+  new mapboxgl.Marker({ color: '#0EA5E9' }).setLngLat([3.3792, 6.5244]).addTo(bookingMap);
+}
+
+// ====== TRACKING ======
+function trackBooking(id) {
+  showToast('Opening live tracker...', 'info');
+  // In production: open real-time tracking view with Mapbox
+}
+
+// ====== CHARTS ======
+function initDashboardCharts() {
+  if (typeof Chart === 'undefined') return;
+  
+  const impactCtx = document.getElementById('impactChart');
+  if (impactCtx) {
+    new Chart(impactCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Recycled', 'Landfill'],
+        datasets: [{ data: [85, 15], backgroundColor: ['#10B981', '#E5E7EB'] }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+  
+  const revenueCtx = document.getElementById('revenueChart');
+  if (revenueCtx) {
+    new Chart(revenueCtx, {
+      type: 'line',
+      data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+          label: 'Revenue',
+          data: [42000, 45000, 48000, 51000, 54000, 58000],
+          borderColor: '#0EA5E9',
+          tension: 0.4,
+          fill: true,
+          backgroundColor: 'rgba(14, 165, 233, 0.1)'
+        }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+  
+  const bookingCtx = document.getElementById('bookingChart');
+  if (bookingCtx) {
+    new Chart(bookingCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [{ label: 'Bookings', data: [120, 150, 180, 160, 200, 240, 190], backgroundColor: '#10B981' }]
+      },
+      options: { plugins: { legend: { display: false } } }
+    });
+  }
+}
+
+// ====== FAQ ======
+document.getElementById('faqList')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.faq-toggle');
+  if (!btn) return;
+  const content = btn.nextElementSibling;
+  const icon = btn.querySelector('i');
+  content.classList.toggle('hidden');
+  icon.classList.toggle('rotate-180');
+});
+
+// ====== UTILITIES ======
+function showToast(msg, type = 'info') {
+  const colors = { success: 'bg-accent-600', error: 'bg-red-600', info: 'bg-brand-600' };
+  const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
+  const toast = document.createElement('div');
+  toast.className = `${colors[type]} text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-up`;
+  toast.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span>${msg}</span>`;
+  document.getElementById('toastContainer').appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+function scrollToSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function startSubscription(plan) {
+  showToast(`${plan} subscription flow coming soon`, 'info');
+}
+function contactSales() {
+  showToast('Sales team will contact you', 'info');
+}
+
+// ====== INIT ======
+window.addEventListener('load', () => {
+  initMaps();
+  
+  // Animate stats
+  const animateValue = (id, start, end, duration) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let current = start;
+    const increment = (end - start) / (duration / 16);
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= end) { current = end; clearInterval(timer); }
+      el.textContent = Math.floor(current) + el.textContent.replace(/[0-9]/g, '');
+    }, 16);
+  };
+  setTimeout(() => {
+    animateValue('statWaste', 0, 120, 2000);
+    animateValue('statRecycled', 0, 85, 2000);
+    animateValue('statCO2', 0, 45, 2000);
+    animateValue('statTrees', 0, 380, 2000);
+  }, 500);
+});
+
+// ====== PWA SERVICE WORKER INLINE ======
+if ('serviceWorker' in navigator && !CONFIG.DEMO_MODE) {
+  const swCode = `
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
+  `;
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob));
+}
+
+/*
+================================================================================
+FIREBASE SETUP GUIDE
+================================================================================
+
+1. FIREBASE AUTH + REALTIME DB + FCM SETUP:
+   a. Go to console.firebase.google.com → Create project "smartwaste"
+   b. Enable Authentication → Sign-in methods → Email, Phone, Google
+   c. Enable Realtime Database → Start in test mode → Note databaseURL
+   d. Enable Cloud Messaging → Generate Web Push certificates
+   e. Project Settings → Add Web App → Copy config object
+   f. Replace CONFIG.firebase in line 95-103 with your keys
+
+2. FIREBASE REALTIME DATABASE SCHEMA:
+/users/{uid}
+  - email, phone, name, role, createdAt, wallet, ecoPoints, addresses[]
+  - role: customer|business|agent|driver|support|operations|admin
+  
+/bookings/{bookingId}
+  - userId, category, size, address, lat, lng, photos[], 
+  - scheduledDate, scheduledTime, status, agentId, driverId,
+  - createdAt, assignedAt, startedAt, completedAt,
+  - rating, review, beforePhoto, afterPhoto, price, paymentStatus
+  - status: pending|assigned|on_the_way|arrived|collected|completed|cancelled
+
+/agents/{agentId}
+  - userId, vehicleType, licensePlate, rating, completedJobs, currentLocation{lat,lng},
+  - status: online|offline|busy, activeBookingId
+
+/subscriptions/{subId}
+  - userId, plan, frequency, nextPickupDate, status, autoRenew
+
+/wallet/{userId}
+  - balance, transactions[{type, amount, desc, date}]
+
+/locations/{userId}/{locationId}
+  - name, address, lat, lng, default
+
+3. FIREBASE SECURITY RULES:
+{
+  "rules": {
+    "users": {
+      "$uid": { ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+                ".write": "$uid === auth.uid" }
+    },
+    "bookings": {
+      ".read": "auth != null",
+      "$bookingId": { ".write": "auth != null && (data.child('userId').val() === auth.uid || 
+                     root.child('users').child(auth.uid).child('role').val() in ['admin','operations','support'])" }
+    },
+    "agents": { ".read": "auth != null", ".write": "root.child('users').child(auth.uid).child('role').val() in ['admin','operations']" }
+  }
+}
+
+================================================================================
+MAPBOX SETUP
+================================================================================
+1. Go to account.mapbox.com → Create token → Replace CONFIG.mapbox line 104
+2. Enable: Maps API, Geocoding API, Directions API, Navigation API
+3. For production: restrict token to your domain
+
+================================================================================
+PAYSTACK & FLUTTERWAVE SETUP  
+================================================================================
+PAYSTACK:
+1. dashboard.paystack.com → Settings → API Keys → Copy Public Key
+2. Replace CONFIG.paystack line 105
+3. For inline JS: PaystackPop.setup({key: CONFIG.paystack, email, amount, ref, callback})
+
+FLUTTERWAVE:
+1. dashboard.flutterwave.com → Settings → API → Copy Public Key  
+2. Replace CONFIG.flutterwave line 106
+3. For inline JS: FlutterwaveCheckout({public_key: CONFIG.flutterwave, tx_ref, amount, ...})
+
+================================================================================
+DEPLOYMENT
+================================================================================
+1. STATIC HOSTING: Upload this single file to Netlify, Vercel, or Firebase Hosting
+2. FIREBASE HOSTING: firebase init hosting → firebase deploy
+3. PWA: Already configured. Users can "Add to Home Screen"
+4. DOMAIN: Point your domain to hosting. Enable HTTPS (required for PWA/FCM)
+
+================================================================================
+ADMIN SETUP
+================================================================================
+1. Create first admin: Sign up normally → Go to Firebase DB → users/{uid}/role = "admin"
+2. Login with that account → Use Role Switcher → Admin Dashboard
+3. From Admin: Create other agents, set pricing zones, manage coverage areas
+
+================================================================================
+DEMO MODE
+================================================================================
+Current file runs 100% without any API keys. All data is mocked.
+To go live: Set CONFIG.DEMO_MODE = false and add all real keys above.
+
+All 7 roles testable via top-right dropdown. Booking, payments, tracking simulated.
+For production, wire up Firebase SDK calls in place of MOCK_DB operations.
+
+================================================================================
+*/
+</script>
+
+<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
+</body>
+</html>
